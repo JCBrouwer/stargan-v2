@@ -25,8 +25,7 @@ import torch.nn.functional as F
 
 
 def get_preds_fromhm(hm):
-    max, idx = torch.max(
-        hm.view(hm.size(0), hm.size(1), hm.size(2) * hm.size(3)), 2)
+    max, idx = torch.max(hm.view(hm.size(0), hm.size(1), hm.size(2) * hm.size(3)), 2)
     idx += 1
     preds = idx.view(idx.size(0), idx.size(1), 1).repeat(1, 1, 2).float()
     preds[..., 0].apply_(lambda x: (x - 1) % hm.size(3) + 1)
@@ -37,10 +36,8 @@ def get_preds_fromhm(hm):
             hm_ = hm[i, j, :]
             pX, pY = int(preds[i, j, 0]) - 1, int(preds[i, j, 1]) - 1
             if pX > 0 and pX < 63 and pY > 0 and pY < 63:
-                diff = torch.FloatTensor(
-                    [hm_[pY, pX + 1] - hm_[pY, pX - 1],
-                     hm_[pY + 1, pX] - hm_[pY - 1, pX]])
-                preds[i, j].add_(diff.sign_().mul_(.25))
+                diff = torch.FloatTensor([hm_[pY, pX + 1] - hm_[pY, pX - 1], hm_[pY + 1, pX] - hm_[pY - 1, pX]])
+                preds[i, j].add_(diff.sign_().mul_(0.25))
 
     preds.add_(-0.5)
     return preds
@@ -52,34 +49,34 @@ class HourGlass(nn.Module):
         self.num_modules = num_modules
         self.depth = depth
         self.features = num_features
-        self.coordconv = CoordConvTh(64, 64, True, True, 256, first_one,
-                                     out_channels=256,
-                                     kernel_size=1, stride=1, padding=0)
+        self.coordconv = CoordConvTh(
+            64, 64, True, True, 256, first_one, out_channels=256, kernel_size=1, stride=1, padding=0
+        )
         self._generate_network(self.depth)
 
     def _generate_network(self, level):
-        self.add_module('b1_' + str(level), ConvBlock(256, 256))
-        self.add_module('b2_' + str(level), ConvBlock(256, 256))
+        self.add_module("b1_" + str(level), ConvBlock(256, 256))
+        self.add_module("b2_" + str(level), ConvBlock(256, 256))
         if level > 1:
             self._generate_network(level - 1)
         else:
-            self.add_module('b2_plus_' + str(level), ConvBlock(256, 256))
-        self.add_module('b3_' + str(level), ConvBlock(256, 256))
+            self.add_module("b2_plus_" + str(level), ConvBlock(256, 256))
+        self.add_module("b3_" + str(level), ConvBlock(256, 256))
 
     def _forward(self, level, inp):
         up1 = inp
-        up1 = self._modules['b1_' + str(level)](up1)
+        up1 = self._modules["b1_" + str(level)](up1)
         low1 = F.avg_pool2d(inp, 2, stride=2)
-        low1 = self._modules['b2_' + str(level)](low1)
+        low1 = self._modules["b2_" + str(level)](low1)
 
         if level > 1:
             low2 = self._forward(level - 1, low1)
         else:
             low2 = low1
-            low2 = self._modules['b2_plus_' + str(level)](low2)
+            low2 = self._modules["b2_plus_" + str(level)](low2)
         low3 = low2
-        low3 = self._modules['b3_' + str(level)](low3)
-        up2 = F.interpolate(low3, scale_factor=2, mode='nearest')
+        low3 = self._modules["b3_" + str(level)](low3)
+        up2 = F.interpolate(low3, scale_factor=2, mode="nearest")
 
         return up1 + up2
 
@@ -93,7 +90,7 @@ class AddCoordsTh(nn.Module):
         super(AddCoordsTh, self).__init__()
         self.with_r = with_r
         self.with_boundary = with_boundary
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         with torch.no_grad():
             x_coords = torch.arange(height).unsqueeze(1).expand(height, width).float()
@@ -120,8 +117,12 @@ class AddCoordsTh(nn.Module):
         if self.with_boundary and heatmap is not None:
             boundary_channel = torch.clamp(heatmap[:, -1:, :, :], 0.0, 1.0)
             zero_tensor = torch.zeros_like(self.x_coords)
-            xx_boundary_channel = torch.where(boundary_channel > 0.05, self.x_coords, zero_tensor).to(zero_tensor.device)
-            yy_boundary_channel = torch.where(boundary_channel > 0.05, self.y_coords, zero_tensor).to(zero_tensor.device)
+            xx_boundary_channel = torch.where(boundary_channel > 0.05, self.x_coords, zero_tensor).to(
+                zero_tensor.device
+            )
+            yy_boundary_channel = torch.where(boundary_channel > 0.05, self.y_coords, zero_tensor).to(
+                zero_tensor.device
+            )
             coords = torch.cat([coords, xx_boundary_channel, yy_boundary_channel], dim=1)
 
         x_and_coords = torch.cat([x, coords], dim=1)
@@ -130,8 +131,8 @@ class AddCoordsTh(nn.Module):
 
 class CoordConvTh(nn.Module):
     """CoordConv layer as in the paper."""
-    def __init__(self, height, width, with_r, with_boundary,
-                 in_channels, first_one=False, *args, **kwargs):
+
+    def __init__(self, height, width, with_r, with_boundary, in_channels, first_one=False, *args, **kwargs):
         super(CoordConvTh, self).__init__()
         self.addcoords = AddCoordsTh(height, width, with_r, with_boundary)
         in_channels += 2
@@ -161,9 +162,9 @@ class ConvBlock(nn.Module):
 
         self.downsample = None
         if in_planes != out_planes:
-            self.downsample = nn.Sequential(nn.BatchNorm2d(in_planes),
-                                            nn.ReLU(True),
-                                            nn.Conv2d(in_planes, out_planes, 1, 1, bias=False))
+            self.downsample = nn.Sequential(
+                nn.BatchNorm2d(in_planes), nn.ReLU(True), nn.Conv2d(in_planes, out_planes, 1, 1, bias=False)
+            )
 
     def forward(self, x):
         residual = x
@@ -194,20 +195,20 @@ class FAN(nn.Module):
         self.end_relu = end_relu
 
         # Base part
-        self.conv1 = CoordConvTh(256, 256, True, False,
-                                 in_channels=3, out_channels=64,
-                                 kernel_size=7, stride=2, padding=3)
+        self.conv1 = CoordConvTh(
+            256, 256, True, False, in_channels=3, out_channels=64, kernel_size=7, stride=2, padding=3
+        )
         self.bn1 = nn.BatchNorm2d(64)
         self.conv2 = ConvBlock(64, 128)
         self.conv3 = ConvBlock(128, 128)
         self.conv4 = ConvBlock(128, 256)
 
         # Stacking part
-        self.add_module('m0', HourGlass(1, 4, 256, first_one=True))
-        self.add_module('top_m_0', ConvBlock(256, 256))
-        self.add_module('conv_last0', nn.Conv2d(256, 256, 1, 1, 0))
-        self.add_module('bn_end0', nn.BatchNorm2d(256))
-        self.add_module('l0', nn.Conv2d(256, num_landmarks+1, 1, 1, 0))
+        self.add_module("m0", HourGlass(1, 4, 256, first_one=True))
+        self.add_module("top_m_0", ConvBlock(256, 256))
+        self.add_module("conv_last0", nn.Conv2d(256, 256, 1, 1, 0))
+        self.add_module("bn_end0", nn.BatchNorm2d(256))
+        self.add_module("l0", nn.Conv2d(256, num_landmarks + 1, 1, 1, 0))
 
         if fname_pretrained is not None:
             self.load_pretrained_weights(fname_pretrained)
@@ -216,10 +217,9 @@ class FAN(nn.Module):
         if torch.cuda.is_available():
             checkpoint = torch.load(fname)
         else:
-            checkpoint = torch.load(fname, map_location=torch.device('cpu'))
+            checkpoint = torch.load(fname, map_location=torch.device("cpu"))
         model_weights = self.state_dict()
-        model_weights.update({k: v for k, v in checkpoint['state_dict'].items()
-                              if k in model_weights})
+        model_weights.update({k: v for k, v in checkpoint["state_dict"].items() if k in model_weights})
         self.load_state_dict(model_weights)
 
     def forward(self, x):
@@ -232,13 +232,12 @@ class FAN(nn.Module):
         outputs = []
         boundary_channels = []
         tmp_out = None
-        ll, boundary_channel = self._modules['m0'](x, tmp_out)
-        ll = self._modules['top_m_0'](ll)
-        ll = F.relu(self._modules['bn_end0']
-                    (self._modules['conv_last0'](ll)), True)
+        ll, boundary_channel = self._modules["m0"](x, tmp_out)
+        ll = self._modules["top_m_0"](ll)
+        ll = F.relu(self._modules["bn_end0"](self._modules["conv_last0"](ll)), True)
 
         # Predict heatmaps
-        tmp_out = self._modules['l0'](ll)
+        tmp_out = self._modules["l0"](ll)
         if self.end_relu:
             tmp_out = F.relu(tmp_out)  # HACK: Added relu
         outputs.append(tmp_out)
@@ -247,21 +246,20 @@ class FAN(nn.Module):
 
     @torch.no_grad()
     def get_heatmap(self, x, b_preprocess=True):
-        ''' outputs 0-1 normalized heatmap '''
-        x = F.interpolate(x, size=256, mode='bilinear')
-        x_01 = x*0.5 + 0.5
+        """ outputs 0-1 normalized heatmap """
+        x = F.interpolate(x, size=256, mode="bilinear")
+        x_01 = x * 0.5 + 0.5
         outputs, _ = self(x_01)
         heatmaps = outputs[-1][:, :-1, :, :]
         scale_factor = x.size(2) // heatmaps.size(2)
         if b_preprocess:
-            heatmaps = F.interpolate(heatmaps, scale_factor=scale_factor,
-                                     mode='bilinear', align_corners=True)
+            heatmaps = F.interpolate(heatmaps, scale_factor=scale_factor, mode="bilinear", align_corners=True)
             heatmaps = preprocess(heatmaps)
         return heatmaps
 
     @torch.no_grad()
     def get_landmark(self, x):
-        ''' outputs landmarks of x.shape '''
+        """ outputs landmarks of x.shape """
         heatmaps = self.get_heatmap(x, b_preprocess=False)
         landmarks = []
         for i in range(x.size(0)):
@@ -279,7 +277,7 @@ class FAN(nn.Module):
 
 def tensor2numpy255(tensor):
     """Converts torch tensor to numpy array."""
-    return ((tensor.permute(1, 2, 0).cpu().numpy() * 0.5 + 0.5) * 255).astype('uint8')
+    return ((tensor.permute(1, 2, 0).cpu().numpy() * 0.5 + 0.5) * 255).astype("uint8")
 
 
 def np2tensor(image):
@@ -287,17 +285,17 @@ def np2tensor(image):
     return torch.FloatTensor(image).permute(2, 0, 1) / 255 * 2 - 1
 
 
-class FaceAligner():
+class FaceAligner:
     def __init__(self, fname_wing, fname_celeba_mean, output_size):
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.fan = FAN(fname_pretrained=fname_wing).to(self.device).eval()
         scale = output_size // 256
-        self.CELEB_REF = np.float32(np.load(fname_celeba_mean)['mean']) * scale
+        self.CELEB_REF = np.float32(np.load(fname_celeba_mean)["mean"]) * scale
         self.xaxis_ref = landmarks2xaxis(self.CELEB_REF)
         self.output_size = output_size
 
     def align(self, imgs, output_size=256):
-        ''' imgs = torch.CUDATensor of BCHW '''
+        """ imgs = torch.CUDATensor of BCHW """
         imgs = imgs.to(self.device)
         landmarkss = self.fan.get_landmark(imgs).cpu().numpy()
         for i, (img, landmarks) in enumerate(zip(imgs, landmarkss)):
@@ -308,15 +306,15 @@ class FaceAligner():
             rows = max(rows, self.output_size)
             cols = max(cols, self.output_size)
             aligned = cv2.warpPerspective(img_np, transform, (cols, rows), flags=cv2.INTER_LANCZOS4)
-            imgs[i] = np2tensor(aligned[:self.output_size, :self.output_size, :])
+            imgs[i] = np2tensor(aligned[: self.output_size, : self.output_size, :])
         return imgs
 
     def landmarks2mat(self, landmarks):
-        T_origin = points2T(landmarks, 'from')
+        T_origin = points2T(landmarks, "from")
         xaxis_src = landmarks2xaxis(landmarks)
         R = vecs2R(xaxis_src, self.xaxis_ref)
         S = landmarks2S(landmarks, self.CELEB_REF)
-        T_ref = points2T(self.CELEB_REF, 'to')
+        T_ref = points2T(self.CELEB_REF, "to")
         matrix = np.dot(T_ref, np.dot(S, np.dot(R, T_origin)))
         return matrix
 
@@ -324,14 +322,14 @@ class FaceAligner():
 def points2T(point, direction):
     point_mean = point.mean(axis=0)
     T = np.eye(3)
-    coef = -1 if direction == 'from' else 1
+    coef = -1 if direction == "from" else 1
     T[:2, 2] = coef * point_mean
     return T
 
 
 def landmarks2eyes(landmarks):
-    idx_left = np.array(list(range(60, 67+1)) + [96])
-    idx_right = np.array(list(range(68, 75+1)) + [97])
+    idx_left = np.array(list(range(60, 67 + 1)) + [96])
+    idx_right = np.array(list(range(68, 75 + 1)) + [97])
     left = landmarks[idx_left]
     right = landmarks[idx_right]
     return left.mean(axis=0), right.mean(axis=0)
@@ -388,19 +386,19 @@ def landmarks2S(x, y):
 
 def pad_mirror(img, landmarks):
     H, W, _ = img.shape
-    img = np.pad(img, ((H//2, H//2), (W//2, W//2), (0, 0)), 'reflect')
-    small_blurred = gaussian(cv2.resize(img, (W, H)), H//100, multichannel=True)
+    img = np.pad(img, ((H // 2, H // 2), (W // 2, W // 2), (0, 0)), "reflect")
+    small_blurred = gaussian(cv2.resize(img, (W, H)), H // 100, multichannel=True)
     blurred = cv2.resize(small_blurred, (W * 2, H * 2)) * 255
 
     H, W, _ = img.shape
     coords = np.meshgrid(np.arange(H), np.arange(W), indexing="ij")
-    weight_y = np.clip(coords[0] / (H//4), 0, 1)
-    weight_x = np.clip(coords[1] / (H//4), 0, 1)
+    weight_y = np.clip(coords[0] / (H // 4), 0, 1)
+    weight_x = np.clip(coords[1] / (H // 4), 0, 1)
     weight_y = np.minimum(weight_y, np.flip(weight_y, axis=0))
     weight_x = np.minimum(weight_x, np.flip(weight_x, axis=1))
-    weight = np.expand_dims(np.minimum(weight_y, weight_x), 2)**4
+    weight = np.expand_dims(np.minimum(weight_y, weight_x), 2) ** 4
     img = img * weight + blurred * (1 - weight)
-    landmarks += np.array([W//4, H//4])
+    landmarks += np.array([W // 4, H // 4])
     return img, landmarks
 
 
@@ -411,22 +409,23 @@ def align_faces(args, input_dir, output_dir):
     from core.utils import save_image
 
     aligner = FaceAligner(args.wing_path, args.lm_path, args.img_size)
-    transform = transforms.Compose([
-        transforms.Resize((args.img_size, args.img_size)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5],
-                             std=[0.5, 0.5, 0.5]),
-    ])
+    transform = transforms.Compose(
+        [
+            transforms.Resize((args.img_size, args.img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        ]
+    )
 
     fnames = os.listdir(input_dir)
     os.makedirs(output_dir, exist_ok=True)
     fnames.sort()
     for fname in fnames:
-        image = Image.open(os.path.join(input_dir, fname)).convert('RGB')
+        image = Image.open(os.path.join(input_dir, fname)).convert("RGB")
         x = transform(image).unsqueeze(0)
         x_aligned = aligner.align(x)
         save_image(x_aligned, 1, filename=os.path.join(output_dir, fname))
-        print('Saved the aligned image to %s...' % fname)
+        print("Saved the aligned image to %s..." % fname)
 
 
 # ========================== #
@@ -438,7 +437,7 @@ def normalize(x, eps=1e-6):
     """Apply min-max normalization."""
     x = x.contiguous()
     N, C, H, W = x.size()
-    x_ = x.view(N*C, -1)
+    x_ = x.view(N * C, -1)
     max_val = torch.max(x_, dim=1, keepdim=True)[0]
     min_val = torch.min(x_, dim=1, keepdim=True)[0]
     x_ = (x_ - min_val) / (max_val - min_val + eps)
@@ -453,7 +452,7 @@ def truncate(x, thres=0.1):
 
 def resize(x, p=2):
     """Resize heatmaps."""
-    return x**p
+    return x ** p
 
 
 def shift(x, N):
@@ -462,14 +461,14 @@ def shift(x, N):
     N = abs(N)
     _, _, H, W = x.size()
     head = torch.arange(N)
-    tail = torch.arange(H-N)
+    tail = torch.arange(H - N)
 
     if up:
-        head = torch.arange(H-N)+N
+        head = torch.arange(H - N) + N
         tail = torch.arange(N)
     else:
-        head = torch.arange(N) + (H-N)
-        tail = torch.arange(H-N)
+        head = torch.arange(N) + (H - N)
+        tail = torch.arange(H - N)
 
     # permutation indices
     perm = torch.cat([head, tail]).to(x.device)
@@ -477,18 +476,20 @@ def shift(x, N):
     return out
 
 
-IDXPAIR = namedtuple('IDXPAIR', 'start end')
-index_map = Munch(chin=IDXPAIR(0 + 8, 33 - 8),
-                  eyebrows=IDXPAIR(33, 51),
-                  eyebrowsedges=IDXPAIR(33, 46),
-                  nose=IDXPAIR(51, 55),
-                  nostrils=IDXPAIR(55, 60),
-                  eyes=IDXPAIR(60, 76),
-                  lipedges=IDXPAIR(76, 82),
-                  lipupper=IDXPAIR(77, 82),
-                  liplower=IDXPAIR(83, 88),
-                  lipinner=IDXPAIR(88, 96))
-OPPAIR = namedtuple('OPPAIR', 'shift resize')
+IDXPAIR = namedtuple("IDXPAIR", "start end")
+index_map = Munch(
+    chin=IDXPAIR(0 + 8, 33 - 8),
+    eyebrows=IDXPAIR(33, 51),
+    eyebrowsedges=IDXPAIR(33, 46),
+    nose=IDXPAIR(51, 55),
+    nostrils=IDXPAIR(55, 60),
+    eyes=IDXPAIR(60, 76),
+    lipedges=IDXPAIR(76, 82),
+    lipupper=IDXPAIR(77, 82),
+    liplower=IDXPAIR(83, 88),
+    lipinner=IDXPAIR(88, 96),
+)
+OPPAIR = namedtuple("OPPAIR", "shift resize")
 
 
 def preprocess(x):
@@ -498,39 +499,48 @@ def preprocess(x):
     x = normalize(x)
 
     sw = H // 256
-    operations = Munch(chin=OPPAIR(0, 3),
-                       eyebrows=OPPAIR(-7*sw, 2),
-                       nostrils=OPPAIR(8*sw, 4),
-                       lipupper=OPPAIR(-8*sw, 4),
-                       liplower=OPPAIR(8*sw, 4),
-                       lipinner=OPPAIR(-2*sw, 3))
+    operations = Munch(
+        chin=OPPAIR(0, 3),
+        eyebrows=OPPAIR(-7 * sw, 2),
+        nostrils=OPPAIR(8 * sw, 4),
+        lipupper=OPPAIR(-8 * sw, 4),
+        liplower=OPPAIR(8 * sw, 4),
+        lipinner=OPPAIR(-2 * sw, 3),
+    )
 
     for part, ops in operations.items():
         start, end = index_map[part]
         x[:, start:end] = resize(shift(x[:, start:end], ops.shift), ops.resize)
 
-    zero_out = torch.cat([torch.arange(0, index_map.chin.start),
-                          torch.arange(index_map.chin.end, 33),
-                          torch.LongTensor([index_map.eyebrowsedges.start,
-                                            index_map.eyebrowsedges.end,
-                                            index_map.lipedges.start,
-                                            index_map.lipedges.end])])
+    zero_out = torch.cat(
+        [
+            torch.arange(0, index_map.chin.start),
+            torch.arange(index_map.chin.end, 33),
+            torch.LongTensor(
+                [
+                    index_map.eyebrowsedges.start,
+                    index_map.eyebrowsedges.end,
+                    index_map.lipedges.start,
+                    index_map.lipedges.end,
+                ]
+            ),
+        ]
+    )
     x[:, zero_out] = 0
 
     start, end = index_map.nose
-    x[:, start+1:end] = shift(x[:, start+1:end], 4*sw)
+    x[:, start + 1 : end] = shift(x[:, start + 1 : end], 4 * sw)
     x[:, start:end] = resize(x[:, start:end], 1)
 
     start, end = index_map.eyes
     x[:, start:end] = resize(x[:, start:end], 1)
-    x[:, start:end] = resize(shift(x[:, start:end], -8), 3) + \
-        shift(x[:, start:end], -24)
+    x[:, start:end] = resize(shift(x[:, start:end], -8), 3) + shift(x[:, start:end], -24)
 
     # Second-level mask
     x2 = deepcopy(x)
-    x2[:, index_map.chin.start:index_map.chin.end] = 0  # start:end was 0:33
-    x2[:, index_map.lipedges.start:index_map.lipinner.end] = 0  # start:end was 76:96
-    x2[:, index_map.eyebrows.start:index_map.eyebrows.end] = 0  # start:end was 33:51
+    x2[:, index_map.chin.start : index_map.chin.end] = 0  # start:end was 0:33
+    x2[:, index_map.lipedges.start : index_map.lipinner.end] = 0  # start:end was 76:96
+    x2[:, index_map.eyebrows.start : index_map.eyebrows.end] = 0  # start:end was 33:51
 
     x = torch.sum(x, dim=1, keepdim=True)  # (N, 1, H, W)
     x2 = torch.sum(x2, dim=1, keepdim=True)  # mask without faceline and mouth

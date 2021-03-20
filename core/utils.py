@@ -26,7 +26,7 @@ import torchvision.utils as vutils
 
 
 def save_json(json_file, filename):
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         json.dump(json_file, f, indent=4, sort_keys=False)
 
 
@@ -40,11 +40,11 @@ def print_network(network, name):
 
 def he_init(module):
     if isinstance(module, nn.Conv2d):
-        nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
         if module.bias is not None:
             nn.init.constant_(module.bias, 0)
     if isinstance(module, nn.Linear):
-        nn.init.kaiming_normal_(module.weight, mode='fan_in', nonlinearity='relu')
+        nn.init.kaiming_normal_(module.weight, mode="fan_in", nonlinearity="relu")
         if module.bias is not None:
             nn.init.constant_(module.bias, 0)
 
@@ -110,11 +110,11 @@ def translate_using_reference(nets, args, x_src, x_ref, y_ref, filename):
     x_concat = [x_src_with_wb]
     for i, s_ref in enumerate(s_ref_list):
         x_fake = nets.generator(x_src, s_ref, masks=masks)
-        x_fake_with_ref = torch.cat([x_ref[i:i+1], x_fake], dim=0)
+        x_fake_with_ref = torch.cat([x_ref[i : i + 1], x_fake], dim=0)
         x_concat += [x_fake_with_ref]
 
     x_concat = torch.cat(x_concat, dim=0)
-    save_image(x_concat, N+1, filename)
+    save_image(x_concat, N + 1, filename)
     del x_concat
 
 
@@ -127,19 +127,18 @@ def debug_image(nets, args, inputs, step):
     N = inputs.x_src.size(0)
 
     # translate and reconstruct (reference-guided)
-    filename = ospj(args.sample_dir, '%06d_cycle_consistency.jpg' % (step))
+    filename = ospj(args.sample_dir, "%06d_cycle_consistency.jpg" % (step))
     translate_and_reconstruct(nets, args, x_src, y_src, x_ref, y_ref, filename)
 
     # latent-guided image synthesis
-    y_trg_list = [torch.tensor(y).repeat(N).to(device)
-                  for y in range(min(args.num_domains, 5))]
+    y_trg_list = [torch.tensor(y).repeat(N).to(device) for y in range(min(args.num_domains, 5))]
     z_trg_list = torch.randn(args.num_outs_per_domain, 1, args.latent_dim).repeat(1, N, 1).to(device)
     for psi in [0.5, 0.7, 1.0]:
-        filename = ospj(args.sample_dir, '%06d_latent_psi_%.1f.jpg' % (step, psi))
+        filename = ospj(args.sample_dir, "%06d_latent_psi_%.1f.jpg" % (step, psi))
         translate_using_latent(nets, args, x_src, y_trg_list, z_trg_list, psi, filename)
 
     # reference-guided image synthesis
-    filename = ospj(args.sample_dir, '%06d_reference.jpg' % (step))
+    filename = ospj(args.sample_dir, "%06d_reference.jpg" % (step))
     translate_using_reference(nets, args, x_src, x_ref, y_ref, filename)
 
 
@@ -149,7 +148,7 @@ def debug_image(nets, args, inputs, step):
 
 
 def sigmoid(x, w=1):
-    return 1. / (1 + np.exp(-w * x))
+    return 1.0 / (1 + np.exp(-w * x))
 
 
 def get_alphas(start=-5, end=5, step=0.5, len_tail=10):
@@ -157,7 +156,7 @@ def get_alphas(start=-5, end=5, step=0.5, len_tail=10):
 
 
 def interpolate(nets, args, x_src, s_prev, s_next):
-    ''' returns T x C x H x W '''
+    """ returns T x C x H x W """
     B = x_src.size(0)
     frames = []
     masks = nets.fan.get_heatmap(x_src) if args.w_hpf > 0 else None
@@ -183,9 +182,9 @@ def slide(entries, margin=32):
     """
     _, C, H, W = entries[0].shape
     alphas = get_alphas()
-    T = len(alphas) # number of frames
+    T = len(alphas)  # number of frames
 
-    canvas = - torch.ones((T, C, H*2, W + margin))
+    canvas = -torch.ones((T, C, H * 2, W + margin))
     merged = torch.cat(entries, dim=2)  # (1, 3, 512, 256)
     for t, alpha in enumerate(alphas):
         top = int(H * (1 - alpha))  # top, bottom for canvas
@@ -201,7 +200,7 @@ def video_ref(nets, args, x_src, x_ref, y_ref, fname):
     video = []
     s_ref = nets.style_encoder(x_ref, y_ref)
     s_prev = None
-    for data_next in tqdm(zip(x_ref, y_ref, s_ref), 'video_ref', len(x_ref)):
+    for data_next in tqdm(zip(x_ref, y_ref, s_ref), "video_ref", len(x_ref)):
         x_next, y_next, s_next = [d.unsqueeze(0) for d in data_next]
         if s_prev is None:
             x_prev, y_prev, s_prev = x_next, y_next, s_next
@@ -243,7 +242,7 @@ def video_latent(nets, args, x_src, y_list, z_list, psi, fname):
     s_prev = None
     video = []
     # fetch reference images
-    for idx_ref, s_next in enumerate(tqdm(s_list, 'video_latent', len(s_list))):
+    for idx_ref, s_next in enumerate(tqdm(s_list, "video_latent", len(s_list))):
         if s_prev is None:
             s_prev = s_next
             continue
@@ -259,16 +258,15 @@ def video_latent(nets, args, x_src, y_list, z_list, psi, fname):
     save_video(fname, video)
 
 
-def save_video(fname, images, output_fps=30, vcodec='libx264', filters=''):
+def save_video(fname, images, output_fps=30, vcodec="libx264", filters=""):
     assert isinstance(images, np.ndarray), "images should be np.array: NHWC"
     num_frames, height, width, channels = images.shape
-    stream = ffmpeg.input('pipe:', format='rawvideo', 
-                          pix_fmt='rgb24', s='{}x{}'.format(width, height))
-    stream = ffmpeg.filter(stream, 'setpts', '2*PTS')  # 2*PTS is for slower playback
-    stream = ffmpeg.output(stream, fname, pix_fmt='yuv420p', vcodec=vcodec, r=output_fps)
+    stream = ffmpeg.input("pipe:", format="rawvideo", pix_fmt="rgb24", s="{}x{}".format(width, height))
+    stream = ffmpeg.filter(stream, "setpts", "2*PTS")  # 2*PTS is for slower playback
+    stream = ffmpeg.output(stream, fname, pix_fmt="yuv420p", vcodec=vcodec, r=output_fps)
     stream = ffmpeg.overwrite_output(stream)
     process = ffmpeg.run_async(stream, pipe_stdin=True)
-    for frame in tqdm(images, desc='writing video to %s' % fname):
+    for frame in tqdm(images, desc="writing video to %s" % fname):
         process.stdin.write(frame.astype(np.uint8).tobytes())
     process.stdin.close()
     process.wait()

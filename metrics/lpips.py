@@ -14,7 +14,7 @@ from torchvision import models
 
 
 def normalize(x, eps=1e-10):
-    return x * torch.rsqrt(torch.sum(x**2, dim=1, keepdim=True) + eps)
+    return x * torch.rsqrt(torch.sum(x ** 2, dim=1, keepdim=True) + eps)
 
 
 class AlexNet(nn.Module):
@@ -38,9 +38,7 @@ class AlexNet(nn.Module):
 class Conv1x1(nn.Module):
     def __init__(self, in_channels, out_channels=1):
         super().__init__()
-        self.main = nn.Sequential(
-            nn.Dropout(0.5),
-            nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False))
+        self.main = nn.Sequential(nn.Dropout(0.5), nn.Conv2d(in_channels, out_channels, 1, 1, 0, bias=False))
 
     def forward(self, x):
         return self.main(x)
@@ -61,10 +59,9 @@ class LPIPS(nn.Module):
     def _load_lpips_weights(self):
         own_state_dict = self.state_dict()
         if torch.cuda.is_available():
-            state_dict = torch.load('metrics/lpips_weights.ckpt')
+            state_dict = torch.load("metrics/lpips_weights.ckpt")
         else:
-            state_dict = torch.load('metrics/lpips_weights.ckpt',
-                                    map_location=torch.device('cpu'))
+            state_dict = torch.load("metrics/lpips_weights.ckpt", map_location=torch.device("cpu"))
         for name, param in state_dict.items():
             if name in own_state_dict:
                 own_state_dict[name].copy_(param)
@@ -78,21 +75,21 @@ class LPIPS(nn.Module):
         for x_fmap, y_fmap, conv1x1 in zip(x_fmaps, y_fmaps, self.lpips_weights):
             x_fmap = normalize(x_fmap)
             y_fmap = normalize(y_fmap)
-            lpips_value += torch.mean(conv1x1((x_fmap - y_fmap)**2))
+            lpips_value += torch.mean(conv1x1((x_fmap - y_fmap) ** 2))
         return lpips_value
 
 
 @torch.no_grad()
 def calculate_lpips_given_images(group_of_images):
     # group_of_images = [torch.randn(N, C, H, W) for _ in range(10)]
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     lpips = LPIPS().eval().to(device)
     lpips_values = []
     num_rand_outputs = len(group_of_images)
 
     # calculate the average of pairwise distances among all random outputs
-    for i in range(num_rand_outputs-1):
-        for j in range(i+1, num_rand_outputs):
+    for i in range(num_rand_outputs - 1):
+        for j in range(i + 1, num_rand_outputs):
             lpips_values.append(lpips(group_of_images[i], group_of_images[j]))
     lpips_value = torch.mean(torch.stack(lpips_values, dim=0))
     return lpips_value.item()
