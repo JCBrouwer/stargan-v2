@@ -1,7 +1,19 @@
+# maua stargan2
 
-## StarGAN v2 - Official PyTorch Implementation
+- added data parallel training (--dataparallel)
+- added resuming from pre-trained checkpoint, even when num_domains of checkpoint is less than desired num_domains (--resume_ckpt /path/to/checkpoint.pt)
 
-<p align="left"><img width="95%" src="assets/teaser.jpg" /></p>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+<br/>
+
+Original README:
 
 > **StarGAN v2: Diverse Image Synthesis for Multiple Domains**<br>
 > [Yunjey Choi](https://github.com/yunjey)\*, [Youngjung Uh](https://github.com/youngjung)\*, [Jaejun Yoo](http://jaejunyoo.blogspot.com/search/label/kr)\*, [Jung-Woo Ha](https://www.facebook.com/jungwoo.ha.921)<br>
@@ -11,11 +23,6 @@
 > Video: https://youtu.be/0EVh5Ki4dIY<br>
 
 > **Abstract:** *A good image-to-image translation model should learn a mapping between different visual domains while satisfying the following properties: 1) diversity of generated images and 2) scalability over multiple domains. Existing methods address either of the issues, having limited diversity or multiple models for all domains. We propose StarGAN v2, a single framework that tackles both and shows significantly improved results over the baselines. Experiments on CelebA-HQ and a new animal faces dataset (AFHQ) validate our superiority in terms of visual quality, diversity, and scalability. To better assess image-to-image translation models, we release AFHQ, high-quality animal faces with large inter- and intra-domain variations. The code, pre-trained models, and dataset are available at clovaai/stargan-v2.*
-
-## Teaser video
-Click the figure to watch the teaser video. <br/>
-
-[![IMAGE ALT TEXT HERE](assets/youtube_video.jpg)](https://youtu.be/0EVh5Ki4dIY)
 
 ## TensorFlow implementation
 The TensorFlow implementation of StarGAN v2 by our team member junho can be found at [clovaai/stargan-v2-tensorflow](https://github.com/clovaai/stargan-v2-tensorflow).
@@ -76,10 +83,6 @@ python main.py --mode align \
                --out_dir assets/representative/celeba_hq/src/female
 ```
 
-
-<p align="left"><img width="99%" src="assets/celebahq_interpolation.gif" /></p>
-
-
 <b>AFHQ.</b> To generate images and interpolation videos, run the following command:
 ```bash
 python main.py --mode sample --num_domains 3 --resume_iter 100000 --w_hpf 0 \
@@ -88,8 +91,6 @@ python main.py --mode sample --num_domains 3 --resume_iter 100000 --w_hpf 0 \
                --src_dir assets/representative/afhq/src \
                --ref_dir assets/representative/afhq/ref
 ```
-
-<p align="left"><img width="99%" src="assets/afhq_interpolation.gif" /></p>
 
 ## Evaluation metrics
 To evaluate StarGAN v2 using [Fr&eacute;chet Inception Distance (FID)](https://arxiv.org/abs/1706.08500) and [Learned Perceptual Image Patch Similarity (LPIPS)](https://arxiv.org/abs/1801.03924), run the following commands:
@@ -140,8 +141,6 @@ python main.py --mode train --num_domains 3 --w_hpf 0 \
 ```
 
 ## Animal Faces-HQ dataset (AFHQ)
-
-<p align="left"><img width="99%" src="assets/afhq_dataset.jpg" /></p>
 
 We release a new dataset of animal faces, Animal Faces-HQ (AFHQ), consisting of 15,000 high-quality images at 512×512 resolution. The figure above shows example images of the AFHQ dataset. The dataset includes three domains of cat, dog, and wildlife, each providing about 5000 images. By having multiple (three) domains and diverse images of various breeds per each domain, AFHQ sets a challenging image-to-image translation problem. For each domain, we select 500 images as a test set and provide all remaining images as a training set. To download the dataset, run the following command:
 
